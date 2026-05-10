@@ -1,0 +1,47 @@
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=hust_oj
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=hustpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Thêm Redis làm Message Broker
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+
+  # Thêm Celery Worker chuyên trách việc chấm bài
+  worker:
+    build: ./backend
+    command: celery -A core worker -l info
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock  # Thêm dòng này để kết nối Docker
+    depends_on:
+      - db
+      - redis
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+
+volumes:
+  postgres_data:
